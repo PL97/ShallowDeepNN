@@ -119,35 +119,34 @@ def cca_analysis(array_1, array_2):
     array_2 = array_2.reshape(-1, num_filter_2)
     print('Data shape: ', array_1.shape)
     start_time = time.time()
-    f_results = cca_core.robust_cca_similarity(array_1.T, array_2.T, epsilon=1e-10)
-    # f_results = cca_core.get_cca_similarity(f_acts_1.T, f_acts_2.T, epsilon=1e-10, verbose=False)
+    # f_results = cca_core.robust_cca_similarity(array_1.T, array_2.T, epsilon=1e-10)
+    f_results = cca_core.get_cca_similarity(array_1.T, array_2.T, epsilon=1e-6, verbose=False)
     print('Time: {:.2f} seconds'.format(time.time() - start_time))
-    _plot_helper(f_results["cca_coef1"], "CCA Coef idx", "CCA coef value")
-    print(f_results["cca_coef1"])
+    # _plot_helper(f_results["cca_coef1"], "CCA Coef idx", "CCA coef value")
+    # print(f_results["cca_coef1"])
     return f_results["cca_coef1"]
 
 
 if __name__ == "__main__":
-    # ====== Compute Intermediate Features ========= # #
-    print('Testing SVCCA analysis')
-    DATA_DIR = os.path.abspath('dataset/Messidor1')
-    MODEL_DIR = os.path.abspath('saved_models/resnet50.pt')
-
-    save_feature_dir = os.path.abspath('model_features')
-    if not os.path.exists(save_feature_dir):
-        os.mkdir(save_feature_dir)
-    res_feature_dir = os.path.join(save_feature_dir, 'resnet')
-    if not os.path.exists(res_feature_dir):
-        os.mkdir(res_feature_dir)
-    # The following transforms should be consistent with the training stage
-    test_data_len = 128  # Modify this if you want larger dataset to compute the features
-    compute_features_resnet(dataset_dir=DATA_DIR,
-                            model_dir=MODEL_DIR,
-                            save_dir=res_feature_dir,
-                            batch_size=8,
-                            test_data_len=test_data_len)
-    # ================================================ # #
-
+    # # ====== Compute Intermediate Features ========= # #
+    # print('Testing SVCCA analysis')
+    # DATA_DIR = os.path.abspath('dataset/Messidor1')
+    # MODEL_DIR = os.path.abspath('saved_models/resnet50.pt')
+    #
+    # save_feature_dir = os.path.abspath('model_features')
+    # if not os.path.exists(save_feature_dir):
+    #     os.mkdir(save_feature_dir)
+    # res_feature_dir = os.path.join(save_feature_dir, 'resnet')
+    # if not os.path.exists(res_feature_dir):
+    #     os.mkdir(res_feature_dir)
+    # # The following transforms should be consistent with the training stage
+    # test_data_len = 128  # Modify this if you want larger dataset to compute the features
+    # compute_features_resnet(dataset_dir=DATA_DIR,
+    #                         model_dir=MODEL_DIR,
+    #                         save_dir=res_feature_dir,
+    #                         batch_size=8,
+    #                         test_data_len=test_data_len)
+    # # ================================================ # #
 
     # ===== CCA Analysis ====
     feature_dir = os.path.abspath('model_features/resnet')
@@ -166,7 +165,8 @@ if __name__ == "__main__":
                 res = cca_analysis(array_1, array_2)
             else:
                 res = cca_analysis(array_2, array_1)
-            res_storage[i-idx_start, j-idx_start] = res
+            res_clip = np.mean(res[0:21])
+            res_storage[i-idx_start, j-idx_start] = res_clip
     cca_res_dir = os.path.join(feature_dir, 'cca_res.npy')
     print(res_storage)
     np.save(cca_res_dir, res_storage)
