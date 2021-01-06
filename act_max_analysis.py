@@ -217,6 +217,63 @@ def _generate_activation(test_module, iter_n, step_size, device,
     return activation.detach().cpu().data.numpy()[0, :, :, :], loss_log
 
 
+def _wrap_visualizations(activation_map,
+                         loss_log,
+                         fig_log_dir,
+                         module_name,
+                         module_idx,
+                         filter_name,
+                         trial_idx):
+    _plot_activation_map(activation_map=activation_map,
+                         fig_log_dir=fig_log_dir,
+                         module_name=module_name,
+                         module_idx=module_idx,
+                         filter_name=filter_name,
+                         trial_number=trial_idx)
+    _plot_loss_log(loss_log=loss_log,
+                   fig_log_dir=fig_log_dir,
+                   module_name=module_name,
+                   module_idx=module_idx,
+                   filter_name=filter_name,
+                   trial_number=trial_idx)
+
+
+def _plot_activation_map(activation_map, fig_log_dir,
+                         module_name,
+                         module_idx,
+                         filter_name,
+                         trial_number):
+    # ===== Visualize Generated Activations
+    fig_1 = plt.figure()
+    ax_1 = fig_1.add_subplot(1, 1, 1)
+    ax_1.imshow(np.transpose(activation_map, [1, 2, 0]))
+    save_fig_dir = os.path.join(fig_log_dir, '%s%d_Filter%s_Trial%d.png' % (module_name,
+                                                                            module_idx,
+                                                                            filter_name,
+                                                                            trial_number))
+    plt.savefig(save_fig_dir, format='png')
+    plt.close(fig_1)
+
+
+def _plot_loss_log(loss_log,
+                   fig_log_dir,
+                   module_name,
+                   module_idx,
+                   filter_name,
+                   trial_number
+                   ):
+    fig_1 = plt.figure()
+    ax_1 = fig_1.add_subplot(1, 1, 1)
+    ax_1.plot(loss_log)
+    ax_1.set_title('Activation Max Log')
+    save_fig_dir = os.path.join(fig_log_dir, '%s%d_Filter%s_Trial%d_loss.png' % (module_name,
+                                                                                 module_idx,
+                                                                                 filter_name,
+                                                                                 trial_number))
+    plt.savefig(save_fig_dir, format='png')
+    plt.close(fig_1)
+
+
 def _act_max(save_activation_dir,
              model,
              model_type,
@@ -265,18 +322,13 @@ def _act_max(save_activation_dir,
                                                                     filter_idx=3)
                     res_to_save.append(activation_map)
                     # # ===== Visualize Generated Activations
-                    _plot_activation_map(activation_map,
+                    _wrap_visualizations(activation_map=activation_map,
+                                         loss_log=loss_log,
                                          fig_log_dir=module_log_dir,
                                          module_name=module_name,
                                          module_idx=idx,
                                          filter_name=filter_name,
-                                         trial_number=trial_idx)
-                    _plot_loss_log(loss_log=loss_log,
-                                   fig_log_dir=module_log_dir,
-                                   module_name=module_name,
-                                   module_idx=idx,
-                                   filter_name=filter_name,
-                                   trial_number=trial_idx)
+                                         trial_idx=trial_idx)
                 save_dir = os.path.join(module_log_dir,
                                         '%s_%d.npy' % (module_name, idx))
                 save_array = np.stack(res_to_save, axis=0)
@@ -304,59 +356,18 @@ def _act_max(save_activation_dir,
                                                                         filter_idx=filter_idx)
                         res_to_save.append(activation_map)
                         # # ===== Visualize Generated Activations
-                        _plot_activation_map(activation_map,
+                        _wrap_visualizations(activation_map=activation_map,
+                                             loss_log=loss_log,
                                              fig_log_dir=module_log_dir,
                                              module_name=module_name,
                                              module_idx=idx,
                                              filter_name=filter_name,
-                                             trial_number=trial_idx)
-                        _plot_loss_log(loss_log=loss_log,
-                                       fig_log_dir=module_log_dir,
-                                       module_name=module_name,
-                                       module_idx=idx,
-                                       filter_name=filter_name,
-                                       trial_number=trial_idx)
+                                             trial_idx=trial_idx)
                     save_dir = os.path.join(module_log_dir,
                                             '%s_%d_filter_%s.npy' % (module_name, idx, filter_name))
                     save_array = np.stack(res_to_save, axis=0)
                     print(save_array.shape)
                     np.save(save_dir, save_array)
-
-
-def _plot_activation_map(activation_map, fig_log_dir,
-                         module_name,
-                         module_idx,
-                         filter_name,
-                         trial_number):
-    # ===== Visualize Generated Activations
-    fig_1 = plt.figure()
-    ax_1 = fig_1.add_subplot(1, 1, 1)
-    ax_1.imshow(np.transpose(activation_map, [1, 2, 0]))
-    save_fig_dir = os.path.join(fig_log_dir, '%s%d_Filter%s_Trial%d.png' % (module_name,
-                                                                            module_idx,
-                                                                            filter_name,
-                                                                            trial_number))
-    plt.savefig(save_fig_dir, format='png')
-    plt.close(fig_1)
-
-
-def _plot_loss_log(loss_log,
-                   fig_log_dir,
-                   module_name,
-                   module_idx,
-                   filter_name,
-                   trial_number
-                   ):
-    fig_1 = plt.figure()
-    ax_1 = fig_1.add_subplot(1, 1, 1)
-    ax_1.plot(loss_log)
-    ax_1.set_title('Activation Max Log')
-    save_fig_dir = os.path.join(fig_log_dir, '%s%d_Filter%s_Trial%d_loss.png' % (module_name,
-                                                                                 module_idx,
-                                                                                 filter_name,
-                                                                                 trial_number))
-    plt.savefig(save_fig_dir, format='png')
-    plt.close(fig_1)
 
 
 if __name__ == "__main__":
