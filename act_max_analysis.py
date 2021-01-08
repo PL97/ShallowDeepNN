@@ -32,23 +32,52 @@ def _ifft2(fft_mag, fft_phase):
     return np.real(scipy.fft.ifft2(combined))
 
 
-def _visualize_fft2(mag_array, phase_array):
-    num_image, _, _ = mag_array.shape
-    fig_1 = plt.figure()
+def _visualize_fft2(mag_array, phase_array,
+                    save_dir,
+                    clipping_threshold=250):
+    """
+    Visualize mag and phase plots and save the images to file.
+
+    Args:
+        mag_array:  array --- (num_image, channel=3, h, w)
+        phase_array: array --- (num_image, channel=3, h, w)
+        save_dir:   path to save the final plots
+        clipping_threshold:   for better visualization of the mag plot
+
+    Returns:
+
+    """
+    num_image, num_channel, _, _ = mag_array.shape
     for i in range(num_image):
-        ax_1 = fig_1.add_subplot(2, num_image, i+1)
-        ax_1.imshow(np.clip(mag_array[i, :, :], -1, 1000), )
-        ax_2 = fig_1.add_subplot(2, num_image, num_image+i+1)
-        ax_2.imshow(phase_array[i, :, :])
-    plt.show()
+        fig_1 = plt.figure()
+        for c in range(num_channel):
+            ax_1 = fig_1.add_subplot(2, num_channel, c+1)
+            ax_1.imshow(np.clip(mag_array[i, c, :, :], -1, clipping_threshold), )
+            ax_2 = fig_1.add_subplot(2, num_channel, num_channel+c+1)
+            ax_2.imshow(phase_array[i, c, :, :])
+        fig_name = save_dir + '_img%d.png' % i
+        plt.savefig(fig_name, format='png')
+        plt.close(fig_1)
 
 
-def _visualize_fft_density(fft_mag, row_idx=None, col_idx=None):
+def _visualize_fft_density(fft_mag, row_idx=None, col_idx=None, clipping_threshold=500):
+    """
+    This helper function plots two line of fft2_magnitude plot, which is helpful in finding the mag plot condition number.
+
+    Args:
+        fft_mag: the fft2 mag plt
+        row_idx: the row plot
+        col_idx: the col to plot
+        clipping_threshold: for better vis quality in the 2d plot
+
+    Returns:
+
+    """
     assert row_idx is not None, 'Please Specify the Row to visualize'
     assert col_idx is not None, 'Please Specify the Col to visualize'
     fig_1 = plt.figure()
     ax_1 = fig_1.add_subplot(1, 3, 1)
-    ax_1.imshow(np.clip(fft_mag, 0, 250))
+    ax_1.imshow(np.clip(fft_mag, 0, clipping_threshold))
     ax_1.axvline(x=row_idx, color='red')
     ax_1.axhline(y=col_idx, color='green')
     ax_2 = fig_1.add_subplot(1, 3, 2)
@@ -60,13 +89,22 @@ def _visualize_fft_density(fft_mag, row_idx=None, col_idx=None):
     plt.show()
 
 
-def _find_energy_threshold(fft_mag):
+def _find_energy_threshold(fft_mag, energy_percentage=0.9999):
+    """
+    A simple function to find the low-pass bandwidth of a fft2 image that preserves x% of the original information.
+
+    Args:
+        fft_mag:
+
+    Returns:
+
+    """
     h, _ = fft_mag.shape
     for margin in range(h):
         new_fft_mag = fft_mag.copy()
         new_fft_mag[margin:h-margin, :] = 0
         new_fft_mag[:, margin:h-margin] = 0
-        if np.linalg.norm(new_fft_mag, ord=2) / np.linalg.norm(fft_mag, ord=2) > 0.9999:
+        if np.linalg.norm(new_fft_mag, ord=2) / np.linalg.norm(fft_mag, ord=2) > energy_percentage:
             return margin
     return None
 
@@ -207,6 +245,20 @@ def _visualize_filter(model, base_img, iter_n, device, step_size, filter_idx):
 
 def _generate_activation(test_module, iter_n, step_size, device,
                          input_size=(50,50,3), filter_idx=None):
+    """
+    Generate one activation max example given the requirements.
+
+    Args:
+        test_module:  A (subset of the) testing NN network.
+        iter_n:      # of iterations to optimize the input image
+        step_size:   step to alter the input image at each iteration
+        device: e.g., torch.device('gpu')
+        input_size:   input image size, at least larger than the perceptive field
+        filter_idx:   None --- using average layer activation; otherwise is the channel idx to activate.
+
+    Returns: The activation max result in numpy array with input_size; a list of loss values
+
+    """
     input_tensor = init_image(size=input_size)
     activation, loss_log = _visualize_filter(model=test_module,
                                              base_img=input_tensor,
@@ -224,6 +276,17 @@ def _wrap_visualizations(activation_map,
                          module_idx,
                          filter_name,
                          trial_idx):
+    """
+    Save to file: 1) the generated activation map  2) the optimization loss (to check if the activation map converges)
+    Args:
+        activation_map:  e.g., the result from the function _generate_activation
+        loss_log:        e.g., the result from the function _generate_activation
+        fig_log_dir:
+        module_name:
+        module_idx:
+        filter_name:
+        trial_idx:      the idx number of the generated example to track result
+    """
     _plot_activation_map(activation_map=activation_map,
                          fig_log_dir=fig_log_dir,
                          module_name=module_name,
@@ -272,6 +335,66 @@ def _plot_loss_log(loss_log,
                                                                                  trial_number))
     plt.savefig(save_fig_dir, format='png')
     plt.close(fig_1)
+
+
+def _fft_analysis(root_dir,
+                  use_model,
+                  avg_activation=False):
+    activation_map_path = os.path.join(root_dir,
+                                       use_model)
+    if avg_activation:
+        activation_map_path = os.path.join(activation_map_path,
+                                           'avg')
+        data_file_lst = [f for f in os.listdir(activation_map_path) if (os.path.isfile(os.path.join(activation_map_path,
+                                                                                                    f)) and (
+                                                                                    '.npy' in f))]
+        _save_fft_plots(root_dir=activation_map_path, file_lst=data_file_lst)
+    else:
+        activation_map_path = os.path.join(activation_map_path,
+                                           'per-filter-activation')
+        module_dir_lst = [f_dir for f_dir in os.listdir(activation_map_path)]
+        for module_dir in module_dir_lst:
+            module_path = os.path.join(activation_map_path,
+                                       module_dir)
+            data_file_lst = [f for f in os.listdir(module_path) if
+                             (os.path.isfile(os.path.join(module_path,
+                                                          f)) and (
+                                      '.npy' in f))]
+            _save_fft_plots(root_dir=module_path, file_lst=data_file_lst)
+    print('FFT plots saved to file.')
+
+
+def _save_fft_plots(root_dir, file_lst):
+    save_plots_dir = os.path.join(root_dir,
+                                  'fft2_vis')
+    if not os.path.exists(save_plots_dir):
+        os.mkdir(save_plots_dir)
+    for file in file_lst:
+        data_file = os.path.join(root_dir,
+                                 file)
+        activation = np.load(data_file)
+        num_data, channel, h, w = activation.shape
+        mag_res, phase_res = [], []
+        for i in range(num_data):
+            mag_channel_res, phase_channel_res = [], []
+            for c in range(channel):
+                test_feature = activation[i, c, :, :]
+                fft_feature = _fft2(test_feature)
+                mag, phase = _mag_phase_fft2(fft_feature)
+                mag_channel_res.append(mag)
+                phase_channel_res.append(phase)
+            mag_channel_res = np.stack(mag_channel_res, axis=0)
+            phase_channel_res = np.stack(phase_channel_res, axis=0)
+            mag_res.append(mag_channel_res)
+            phase_res.append(phase_channel_res)
+        mag_res = np.stack(mag_res, axis=0)
+        phase_res = np.stack(phase_res, axis=0)
+        plot_name = os.path.join(save_plots_dir, file[:-4])
+        np.save(plot_name+'_mag.npy', mag_res)
+        np.save(plot_name + '_phase.npy', phase_res)
+        _visualize_fft2(mag_res, phase_res,
+                        clipping_threshold=500,
+                        save_dir=plot_name)
 
 
 def _act_max(save_activation_dir,
@@ -373,7 +496,11 @@ def _act_max(save_activation_dir,
 if __name__ == "__main__":
     # Change use_model to specify testing model
     use_model = 'CBR_Tiny'
-    avg_activation = False  # True to use avg_activation; False to use per filter activation
+    num_trial = 2  # number of activation to generate on each layer/block
+    # avg_activation = True to use avg_activation; False to use per filter activation
+    # But if you decide to use False, go check filter_start and filter_end parameter inside
+    # function "_act_max()"
+    avg_activation = False
 
     #  DATA_DIR points at where Messidor1 dataset (npy) locates
     DATA_DIR = os.path.abspath('dataset/Messidor1')
@@ -387,63 +514,53 @@ if __name__ == "__main__":
         os.mkdir(activation_feature_dir)
 
     # Specified configurations and log directories based on parameter 'use_model'
-    if use_model == 'vgg':
-        feature_dir = os.path.join(activation_feature_dir, 'vgg16')
-        if not os.path.exists(feature_dir):
-            os.mkdir(feature_dir)
-        model = vgg16(pretrained=True)
-        model_type = 'vgg'
-        split_block = torch.nn.ReLU
-    elif use_model == 'resnet':
-        feature_dir = os.path.join(activation_feature_dir, 'rennet50')
-        if not os.path.exists(feature_dir):
-            os.mkdir(feature_dir)
-        model = resnet50(pretrained=False, num_classes=2)
-        MODEL_DIR = os.path.abspath('saved_models/resnet50.pt')
-        model.load_state_dict(torch.load(MODEL_DIR))
-        model_type = 'resnet'
-        split_block = torch.nn.Sequential
-    elif use_model == 'CBR_Tiny':
-        feature_dir = os.path.join(activation_feature_dir, 'CBR_tiny')
-        if not os.path.exists(feature_dir):
-            os.mkdir(feature_dir)
-        model = CBR_Tiny()
-        MODEL_DIR = os.path.abspath('saved_models/CBR_Tiny.pt')
-        model.load_state_dict(torch.load(MODEL_DIR))
-        model_type = 'CBR'
-        split_block = CBR
-    else:
-        print('Not supporting model type yet.')
+    feature_dir = os.path.join(activation_feature_dir, use_model)
+    # if not os.path.exists(feature_dir):
+    #     os.mkdir(feature_dir)
+    # if use_model == 'vgg':
+    #     model = vgg16(pretrained=True)
+    #     model_type = 'vgg'
+    #     split_block = torch.nn.ReLU
+    # elif use_model == 'resnet':
+    #     # model = resnet50(pretrained=False, num_classes=2)
+    #     # MODEL_DIR = os.path.abspath('saved_models/resnet50.pt')
+    #     # model.load_state_dict(torch.load(MODEL_DIR))
+    #     model = resnet50(pretrained=True)
+    #     model_type = 'resnet'
+    #     split_block = torch.nn.Sequential
+    # elif use_model == 'CBR_Tiny':
+    #     model = CBR_Tiny()
+    #     MODEL_DIR = os.path.abspath('saved_models/CBR_Tiny.pt')
+    #     model.load_state_dict(torch.load(MODEL_DIR))
+    #     model_type = 'CBR'
+    #     split_block = CBR
+    # elif use_model == 'CBR_Small':
+    #     model = CBR_Small()
+    #     MODEL_DIR = os.path.abspath('saved_models/CBR_Small.pt')
+    #     model.load_state_dict(torch.load(MODEL_DIR))
+    #     model_type = 'CBR'
+    #     split_block = CBR
+    # else:
+    #     print('Not supporting model type yet.')
 
     # # OBS: if avg_activation is set as "False", check filter_start and filter_end
     # # inside function _act_max, right now they are not automatically set to adapt to model types
-    _act_max(save_activation_dir=feature_dir,
-             model=model,
-             model_type=model_type,
-             block_name=split_block,
-             avg_activation=avg_activation,
-             num_trial=1,
-             input_size=(224, 224, 3),
-             iter_n=1000,
-             step_size=1e-1)
+    # _act_max(save_activation_dir=feature_dir,
+    #          model=model,
+    #          model_type=model_type,
+    #          block_name=split_block,
+    #          avg_activation=avg_activation,
+    #          num_trial=num_trial,
+    #          input_size=(224, 224, 3),
+    #          iter_n=1000,
+    #          step_size=1e-1)
 
     # # === Fourier Analysis of the activation maps === # #
-    # sample_map_path_1 = os.path.join(res_feature_dir, 'Module_7.npy')
-    # sample_map_path_2 = os.path.join(res_feature_dir, 'Module_4.npy')
-    # activation_1 = np.load(sample_map_path_1)
-    # activation_2 = np.load(sample_map_path_2)
-    #
-    # num_data, channel, h, w = activation_1.shape
-    # mag_res, phase_res = [], []
-    # for i in range(num_data):
-    #     test_feature = activation_1[i, 0, :, :]
-    #     fft_feature = _fft2(test_feature)
-    #     mag, phase = _mag_phase_fft2(fft_feature)
-    #     mag_res.append(mag)
-    #     phase_res.append(phase)
-    # mag_res = np.stack(mag_res, axis=0)
-    # phase_res = np.stack(phase_res, axis=0)
-    # _visualize_fft2(mag_res, phase_res)
-    # # _visualize_fft_density(mag_res[0, :, :], row_idx=0, col_idx=15)
-    # print()
+    # _fft_analysis(root_dir=activation_feature_dir,
+    #               use_model=use_model,
+    #               avg_activation=avg_activation)
+
+    # # === Analysis Energy (low-passed) Percentage of the activation maps ===
+
+    print('That\'s it! No more sleep and get up now!')
 
