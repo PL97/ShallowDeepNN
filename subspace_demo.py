@@ -68,7 +68,7 @@ if __name__ == "__main__":
     # 2) Principle angles of one activation feature #1 and a random data matrix with the same size as #2
 
     # # Specify testing model (activations)
-    test_model_name = 'CBR_Tiny'
+    test_model_name = 'MNIST'
     test_case_dir = './model_activations/%s' % test_model_name
     model_idx_1, model_idx_2 = 0, 0
 
