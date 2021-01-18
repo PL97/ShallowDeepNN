@@ -73,8 +73,8 @@ if __name__ == "__main__":
     model_idx_1, model_idx_2 = 0, 0
 
     # # Configure Layer index specifications
-    idx_start, idx_end = 0, 7
-    idx_1_list = list(range(idx_start, idx_end, 2))
+    idx_start, idx_end = 0, 5
+    idx_1_list = list(range(idx_start, idx_end, 1))
 
     # Configuring Principle Element Threshold
     principle_element_threshold = 0.99
