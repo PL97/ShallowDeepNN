@@ -1,14 +1,7 @@
-import os, sys
-import time, argparse
-from matplotlib import pyplot as plt
+import os
+import argparse
 import numpy as np
-import numpy.linalg as nlg
-import cupy as cp
-import cupy.linalg as clg
-import pickle
-import pandas
-import gzip
-from scripts.utils.subspace_analysis import subspace_ananysis_cpu, _plot_helper, _plot_save
+from scripts.utils.subspace_analysis import subspace_ananysis_cpu, _plot_save
 
 
 def _subspace_compare(test_data_dir, data_partition_num,
