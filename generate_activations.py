@@ -6,31 +6,25 @@ import os
 from scripts.models.model_cbr import CBR_Tiny, CBR
 import numpy as np
 import torch
-from torchvision import transforms
-
-data_transforms = torch.nn.Sequential(
-    transforms.Resize(size=[224, 224]),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-)
-scripted_transforms = torch.jit.script(data_transforms)
+import argparse
 
 
 def to_input_tensor(np_array, device, requires_grad=False):
-    tensor_out = torch.from_numpy(np.transpose(np_array, [0, 3, 1, 2]))
-    tensor_out = scripted_transforms(tensor_out)
+    tensor_out = torch.from_numpy(np_array)
     tensor_out = tensor_out.to(device, dtype=torch.float32)
     tensor_out.requires_grad = requires_grad
     return tensor_out
 
 
-if __name__ == "__main__":
+def main(args):
     # ==== Configs ====
-    data_idx = 0  # in list(range(10)), help pick the saved input data file
+    data_idx = args.data_idx  # in list(range(10)), help pick the saved input data file
 
-    use_model = 'CBR_Tiny'  # Specified the trained model type
-    model_idx = 0  # The idx of the picked model within a use_model type.
+    use_model = args.use_model  # Specified the trained model type
+    model_idx = args.model_idx  # The idx of the picked model within a use_model type.
 
-    batch_size = 8  # Batch Size
+    batch_size = args.batch_size  # Batch Size
+    data_set = args.data_set
 
     # ==== Other Automatic Settings ====
     activation_root_dir = os.path.abspath('model_activations')
@@ -40,8 +34,9 @@ if __name__ == "__main__":
         device = torch.device('cpu')
 
     # Load Data
-    data_path = os.path.abspath('dataset/Retina_kaggle/diabetic-retinopathy-%d.npz' % data_idx)
-    DATA_RAW = np.load(data_path)["data"][0:18,:,:,:]
+    data_path = os.path.abspath(data_set)
+    data_path = os.path.join(data_path, 'retinopathy-%d.npy' % data_idx)
+    DATA_RAW = np.load(data_path)
     data_len = DATA_RAW.shape[0]
     print('data_length: ', data_len)
     print('Data Mat Shape: ', DATA_RAW.shape)
@@ -66,6 +61,7 @@ if __name__ == "__main__":
         print('Unsupport use_model type yet. Check input param!')
 
     for module_idx in range(len(module_lst)):
+        # if type(module_lst[module_idx]) == splict_block and module_idx > 1:
         if type(module_lst[module_idx]) == splict_block:
             print(' ===> Computing %d Layer Activations ....' % module_idx)
             test_module = torch.nn.Sequential(*module_lst[0:module_idx+1])
@@ -76,19 +72,35 @@ if __name__ == "__main__":
                 idx_start = batch_idx * batch_size
                 idx_end = batch_idx * batch_size + batch_size
 
-                data_numpy = DATA_RAW[idx_start:idx_end, :, :, :] / 255
+                data_numpy = DATA_RAW[idx_start:idx_end, :, :, :]
                 tensor_input = to_input_tensor(data_numpy,
                                                device=device,
                                                requires_grad=False)
                 activation = test_module(tensor_input).detach().cpu().numpy()
                 activation_log.append(activation)
+            # Check activation dimensions
             activation_log = np.concatenate(activation_log, axis=0)
             save_file_path = os.path.join(activation_root_dir,
-                                          'model_%d_lay%02d.npy' % (model_idx, module_idx))
+                                          'ds%d_model%d_lay%2d.npy' % (data_idx,
+                                                                       model_idx,
+                                                                       module_idx))
             np.save(save_file_path, activation_log)
             print('Check Activation Size: ', activation_log.shape)
             print('Activation Calculation Completed. Save File.')
 
 
+if __name__ == "__main__":
+    # Parse arguments
+    parser = argparse.ArgumentParser(description="Specify 'data idx' and 'process batch size'.")
+
+    parser.add_argument('--data_idx', dest='data_idx', type=int, action='store', default=0)
+    parser.add_argument('--batch_size', dest='batch_size', type=int, action='store', default=16)
+    parser.add_argument('--use_mode', dest='use_model', type=str, action='store', default='CBR_Tiny')
+    parser.add_argument('--model_idx', dest='model_idx', type=int, action='store', default=0)
+    parser.add_argument('--data_set', dest='data_set', type=str, action='store',
+                        default='dataset/Retina_kaggle/downsampled')
+
+    args = parser.parse_args()
+    main(args)
 
 
