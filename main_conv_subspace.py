@@ -63,7 +63,7 @@ def main(args):
     model_idx = args.model_idx
 
     # # activation_dir sensitive param: (check before each job submission)
-    data_partition_num = 10
+    data_partition_num = args.data_partition_num
     layer_idx_end = 7
 
     model_idx_1, model_idx_2 = model_idx, model_idx
@@ -105,6 +105,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Specify 'data idx' and 'process batch size'.")
 
     parser.add_argument('--model_idx', dest='model_idx', type=int, action='store', default=0)
+    parser.add_argument('--data_partition_num', dest='data_partition_num',
+                        type=int, action='store', default=10)
     parser.add_argument('--activation_dir', dest='activation_dir', type=str, action='store',
                         default='model_activations/CBR_Tiny')
 
