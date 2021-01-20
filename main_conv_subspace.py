@@ -4,24 +4,29 @@ import numpy as np
 from scripts.utils.subspace_analysis import subspace_ananysis_cpu, _plot_save
 
 
-def _subspace_compare(test_data_dir, data_partition_num,
+def _subspace_compare(test_data_dir,
+                      data_partition_num,
+                      activation_partition_num,
                       model_idx_1, model_idx_2,
                       layer_idx_1, layer_idx_2,
                       threshold=0.9):
     acts1, acts2 = [], []
     for i_part in range(data_partition_num):
-        data_1_path = os.path.join(test_data_dir,
-                                   'ds%d_model%d_lay %d.npy' % (i_part,
-                                                                model_idx_1,
-                                                                layer_idx_1))
-        data_2_path = os.path.join(test_data_dir,
-                                   'ds%d_model%d_lay %d.npy' % (i_part,
-                                                                model_idx_2,
-                                                                layer_idx_2))
-        data_1 = np.load(data_1_path)
-        data_2 = np.load(data_2_path)
-        acts1.append(data_1)
-        acts2.append(data_2)
+        for a_part in range(activation_partition_num):
+            data_1_path = os.path.join(test_data_dir,
+                                       'ds%d_model%d_lay %d_part%d.npy' % (i_part,
+                                                                           model_idx_1,
+                                                                           layer_idx_1,
+                                                                           a_part))
+            data_2_path = os.path.join(test_data_dir,
+                                       'ds%d_model%d_lay %d_part%d.npy' % (i_part,
+                                                                           model_idx_2,
+                                                                           layer_idx_2,
+                                                                           a_part))
+            data_1 = np.load(data_1_path)
+            data_2 = np.load(data_2_path)
+            acts1.append(data_1)
+            acts2.append(data_2)
     acts1 = np.concatenate(acts1, axis=0)
     acts2 = np.concatenate(acts2, axis=0)
     acts1 = np.transpose(acts1, [1, 2, 3, 0])
@@ -64,6 +69,7 @@ def main(args):
 
     # # activation_dir sensitive param: (check before each job submission)
     data_partition_num = args.data_partition_num
+    act_partition_num = args.act_partition_num
     layer_idx_end = 7
 
     model_idx_1, model_idx_2 = model_idx, model_idx
@@ -74,18 +80,20 @@ def main(args):
     for layer_idx_1 in range(0, layer_idx_end):
         for layer_idx_2 in range(layer_idx_1, layer_idx_end):
             check_path_1 = os.path.join(activation_dir,
-                                        'ds0_model%d_lay %d.npy' % (model_idx_1,
-                                                                    layer_idx_1))
+                                        'ds0_model%d_lay %d_part0.npy' % (model_idx_1,
+                                                                          layer_idx_1))
             check_path_2 = os.path.join(activation_dir,
-                                        'ds0_model%d_lay %d.npy' % (model_idx_2,
-                                                                    layer_idx_2)
+                                        'ds0_model%d_lay %d_part0.npy' % (model_idx_2,
+                                                                          layer_idx_2)
                                         )
             if os.path.exists(check_path_1) and os.path.exists(check_path_2):
                 # # Run analysis
-                avg_test, avg_baseline = _subspace_compare(activation_dir, data_partition_num,
+                avg_test, avg_baseline = _subspace_compare(activation_dir,
+                                                           data_partition_num,
+                                                           act_partition_num,
                                                            model_idx_1, model_idx_2,
                                                            layer_idx_1, layer_idx_2,
-                                                           threshold=0.9)
+                                                           threshold=0.99)
                 avg_angle_log[layer_idx_1, layer_idx_2] = avg_test
                 avg_angle_log_baselines[layer_idx_1, layer_idx_2] = avg_baseline
             else:
@@ -109,7 +117,8 @@ if __name__ == "__main__":
                         type=int, action='store', default=10)
     parser.add_argument('--activation_dir', dest='activation_dir', type=str, action='store',
                         default='model_activations/CBR_Tiny')
-
+    # parser.add_argument('--act_partition_num', dest='act_partition_num', type=int, action='store', default=2)
+    parser.add_argument('--act_partition_num', dest='act_partition_num', type=int, action='store', default=7)
     args = parser.parse_args()
     main(args)
 
