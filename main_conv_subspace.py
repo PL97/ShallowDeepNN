@@ -25,10 +25,10 @@ def _subspace_compare(test_data_dir,
                                                                            model_idx_2,
                                                                            layer_idx_2,
                                                                            a_part))
-            print('Load Data Dim Check (data_1):, ', data_1.shape)
-            print('Load Data Dim Check (data_2): ', data_2.shape)
             data_1 = np.load(data_1_path)
             data_2 = np.load(data_2_path)
+            print('Load Data Dim Check (data_1):, ', data_1.shape)
+            print('Load Data Dim Check (data_2): ', data_2.shape)
             acts1.append(data_1)
             acts2.append(data_2)
     acts1 = np.concatenate(acts1, axis=0)
@@ -121,8 +121,8 @@ if __name__ == "__main__":
                         type=int, action='store', default=10)
     parser.add_argument('--activation_dir', dest='activation_dir', type=str, action='store',
                         default='model_activations/CBR_Tiny')
-    parser.add_argument('--act_partition_num', dest='act_partition_num', type=int, action='store', default=2)
-    # parser.add_argument('--act_partition_num', dest='act_partition_num', type=int, action='store', default=7)
+    # parser.add_argument('--act_partition_num', dest='act_partition_num', type=int, action='store', default=2)
+    parser.add_argument('--act_partition_num', dest='act_partition_num', type=int, action='store', default=7)
     args = parser.parse_args()
     main(args)
 
