@@ -170,8 +170,9 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(description="Specify 'data idx' and 'process batch size'.")
     parser.add_argument('--batch_size', dest='batch_size', type=int, action='store', default=8)
-    parser.add_argument('--use_mode', dest='use_model', type=str, action='store', default='Dense121')
+    parser.add_argument('--use_model', dest='use_model', type=str, action='store', default='Dense121')
     parser.add_argument('--model_idx', dest='model_idx', type=int, action='store', default=0)
+    parser.add_argument('--layer_idx', dest='layer_idx', type=int, action='store', default=10)
 
     args = parser.parse_args()
     main(args)
