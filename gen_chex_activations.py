@@ -1,9 +1,6 @@
 # This script generates features from CNN modules and save to disks
-# The saved features (np.array) are thus ready for feature analysis
-# E.g., subspace principle angle analysis / SVCCA
 
-# Something needed prior to this code: dataset of input images
-
+import argparse, os
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -11,6 +8,9 @@ import torch
 from collections import Counter
 import random
 from scripts.utils.chexpert_dataset import preprocess, CheXpert
+from scripts.models.dense_model import densenet121
+from torchvision.models.densenet import _DenseBlock
+import torchvision
 
 
 def count_label(L):
@@ -18,7 +18,7 @@ def count_label(L):
         print(Counter(L[:, i]))
 
 
-def load_data(input_num):
+def load_data(input_num, batch_size=16):
     RootPath = "/home/jusun/shared/Stanford_Dataset/"
     df = pd.read_csv(RootPath + "CheXpert-v1.0-small/TEST.csv")
     df = preprocess(df, RootPath)
@@ -29,7 +29,7 @@ def load_data(input_num):
     # print(len(set(IDX)), len(IDX))
     # count_label(label[IDX])
     df_sample = (df.iloc[IDX, :]).reset_index(drop=True)
-    test_dl = DataLoader(CheXpert(df_sample), batch_size=64, shuffle=True)  # modify batch size here
+    test_dl = DataLoader(CheXpert(df_sample), batch_size=batch_size, shuffle=True)  # modify batch size here
     return test_dl
 
 
@@ -78,14 +78,12 @@ def to_input_tensor(np_array, device, requires_grad=False):
 
 def main(args):
     # ==== Configs ====
-    data_idx = args.data_idx  # in list(range(10)), help pick the saved input data file
     module_idx = args.layer_idx
 
     use_model = args.use_model  # Specified the trained model type
     model_idx = args.model_idx  # The idx of the picked model within a use_model type.
-
     batch_size = args.batch_size  # Batch Size
-    data_set = args.data_set
+    data_idx = 0
 
     # ==== Other Automatic Settings ====
     activation_root_dir = os.path.abspath('model_activations')
@@ -95,19 +93,26 @@ def main(args):
         device = torch.device('cpu')
 
     # Load Data
-    data_path = os.path.abspath(data_set)
-    data_path = os.path.join(data_path, 'retinopathy-%d.npy' % data_idx)
-    DATA_RAW = np.load(data_path)
-    data_len = DATA_RAW.shape[0]
+    df = load_data(input_num=2000,
+                   batch_size=batch_size)
+    data_len = len(df)
     print('data_length: ', data_len)
-    print('Data Mat Shape: ', DATA_RAW.shape)
 
-    if use_model == 'CBR_Tiny':
-        model = CBR_Tiny()
-        model_path = os.path.abspath('saved_models/CBR/CBR_Tiny.pt')
-        model.load_state_dict(torch.load(model_path))
-        model_type = 'CBR'
-        splict_block = CBR
+    if use_model == 'Dense121':
+        model = densenet121(num_classes=13, pretrained=False)
+        model_path = 'saved_models/dense121/dense121.pth.tar'
+        # Load Model Params
+        state_dict = torch.load(model_path)['state_dict']
+        key_list = state_dict.keys()
+
+        for key, param in model.state_dict().items():
+            if 'module.' + key in key_list:
+                model.state_dict()[key].copy_(state_dict['module.' + key])
+            else:
+                print('Did not find weights for: ', key)
+
+        model_type = 'dense'
+        splict_block = _DenseBlock
         activation_root_dir = os.path.join(activation_root_dir, use_model)
         if not os.path.exists(activation_root_dir):
             os.mkdir(activation_root_dir)
@@ -116,28 +121,26 @@ def main(args):
 
     model.to(device)
     model.eval()
-    if model_type == 'CBR':
-        module_lst = list(model.children())
+    if model_type == 'dense':
+        module_lst = list(list(model.children())[0].children())
     else:
         print('Unsupport use_model type yet. Check input param!')
-
 
     # if type(module_lst[module_idx]) == splict_block and module_idx > 1:
     if type(module_lst[module_idx]) == splict_block:
         print(' ===> Computing %d Layer Activations ....' % module_idx)
-        test_module = torch.nn.Sequential(*module_lst[0:module_idx+1])
+        if model_idx < 10:
+            test_module = torch.nn.Sequential(*module_lst[0:module_idx+2])
+        elif model_idx == 10:
+            test_module = torch.nn.Sequential(*module_lst[:])
+        else:
+            print('Module Idx Exceed Model Structure.')
+            return None
 
         activation_log = []
         partition_num, splict_batch_num = 0, 512
-        n_batch = data_len // batch_size
-        for batch_idx in range(n_batch):
-            idx_start = batch_idx * batch_size
-            idx_end = batch_idx * batch_size + batch_size
 
-            data_numpy = DATA_RAW[idx_start:idx_end, :, :, :]
-            tensor_input = to_input_tensor(data_numpy,
-                                           device=device,
-                                           requires_grad=False)
+        for tensor_input, _ in df:
             activation = test_module(tensor_input).detach().cpu().numpy()
             activation_log.append(activation)
             if len(activation_log) >= splict_batch_num / batch_size:
@@ -166,16 +169,26 @@ def main(args):
 if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(description="Specify 'data idx' and 'process batch size'.")
-
-    parser.add_argument('--data_idx', dest='data_idx', type=int, action='store', default=0)
-    parser.add_argument('--layer_idx', dest='layer_idx', type=int, action='store', default=6)
-    parser.add_argument('--batch_size', dest='batch_size', type=int, action='store', default=16)
-    parser.add_argument('--use_mode', dest='use_model', type=str, action='store', default='CBR_Tiny')
+    parser.add_argument('--batch_size', dest='batch_size', type=int, action='store', default=8)
+    parser.add_argument('--use_mode', dest='use_model', type=str, action='store', default='Dense121')
     parser.add_argument('--model_idx', dest='model_idx', type=int, action='store', default=0)
-    parser.add_argument('--data_set', dest='data_set', type=str, action='store',
-                        default='dataset/Retina_kaggle/downsampled')
 
     args = parser.parse_args()
     main(args)
-
+    # model_path = 'saved_models/dense121/dense121.pth.tar'
+    # model = densenet121(num_classes=13, pretrained=False)
+    # state_dict = torch.load(model_path)['state_dict']
+    # key_list = state_dict.keys()
+    #
+    # for key, param in model.state_dict().items():
+    #     if 'module.' + key in key_list:
+    #         model.state_dict()[key].copy_(state_dict['module.' + key])
+    #     else:
+    #         print('Did not find weights for: ', key)
+    #
+    # a = list(list(model.children())[0].children())
+    # for block in a:
+    #     print('Block type: ', type(block))
+    #     print(type(block) is _DenseBlock)
+    # print()
 
